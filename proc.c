@@ -211,6 +211,11 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  
+   np->signal_mask = curproc->signal_mask;
+  for(i = 0; i < 32; i++){
+    np->signal_handler[i] = curproc->signal_handler[i];
+  }
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -222,10 +227,7 @@ fork(void)
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
-//  np->signal_handler[SIG_IGN] = (void) SIG_DFL;
-  // np->signal_handler[SIGKILL] = (void) SIG_DFL;
-  // np->signal_handler[SIGSTOP] = (void) SIG_DFL;
-  // np->signal_handler[SIGCONT] = (void) SIG_DFL;
+   
 
   pid = np->pid;
 

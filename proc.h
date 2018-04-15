@@ -57,8 +57,8 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  uint pending_signals[32];    //task 2.1.1
-  uint signal_mask[32];        //task 2.1.1
+  uint pending_signals;    //task 2.1.1
+  uint signal_mask;       //task 2.1.1
   void* signal_handler[32];    //task 2.1.1
 
 };
