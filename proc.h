@@ -1,5 +1,5 @@
-#define SIG DFL −1 /* default signal handling */
-#define SIG IGN 1 /*ignore signal */
+#define SIG_DFL −1 /* default signal handling */
+#define SIG_IGN 1 /*ignore signal */
 
 #define SIGKILL 9
 #define SIGSTOP 17
