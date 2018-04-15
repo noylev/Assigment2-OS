@@ -98,17 +98,16 @@ exec(char *path, char **argv)
   curproc->pgdir = pgdir;
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
+
   curproc->tf->esp = sp;
+
   switchuvm(curproc);
   freevm(oldpgdir);
-  
-  for(int index = 0; index < 32; index++){
-    if(curproc->signal_handler[index] != (void*)SIG_IGN){
-curproc->signal_handler[index] = SIG_DFL;
-        
+  for(i=0; i < 32; i++) {
+    if(curproc->signal_handler[i] != (void*)SIG_IGN) {
+      curproc->signal_handler[i] = SIG_DFL;
     }
-}
-  
+  }
   return 0;
 
  bad:
