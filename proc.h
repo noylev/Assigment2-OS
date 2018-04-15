@@ -1,5 +1,5 @@
-#define SIG DFL −1 /* default signal handling */
-#define SIG IGN 1 /*ignore signal */
+#define SIG_DFL −1 /* default signal handling */
+#define SIG_IGN 1 /*ignore signal */
 
 #define SIGKILL 9
 #define SIGSTOP 17
@@ -59,8 +59,8 @@ struct proc {
   char name[16];               // Process name (debugging)
   uint pending_signals[32];    //task 2.1.1
   uint signal_mask[32];        //task 2.1.1
-  void* signal_handler[32];    //task 2.1.1 
-  
+  void* signal_handler[32];    //task 2.1.1
+
 };
 
 // Process memory is laid out contiguously, low addresses first:
