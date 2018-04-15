@@ -13,3 +13,16 @@ _grep
 _forktest
 _echo
 _cat
+*.o
+*.d
+*.sym
+*.asm
+xv6.img
+vectors.S
+mkfs
+kernel
+initcode
+entryother
+initcode.out
+bootblock
+fs.img
