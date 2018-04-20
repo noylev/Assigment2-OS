@@ -216,8 +216,9 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
-  
-   np->signal_mask = curproc->signal_mask;
+
+  // Copy signal masks and handers.
+  np->signal_mask = curproc->signal_mask;
   for(i = 0; i < 32; i++){
     np->signal_handler[i] = curproc->signal_handler[i];
   }
@@ -232,7 +233,7 @@ fork(void)
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
-   
+
 
   pid = np->pid;
 
@@ -555,4 +556,29 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+// Changes signal mask.
+uint sigprocmask (uint signal_mask) {
+  struct proc * current_proc = myproc();
+  uint old_signal_mask = current_proc->signal_mask;
+  current_proc->signal_mask = signal_mask;
+  return old_signal_mask;
+}
+
+// Updates a specific signal handler.
+sighandler_t signal(int signal_number, sighandler_t handler) {
+  if(0 > signal_number || signal_number > 31) {
+    return (void*) -2;
+  }
+  struct proc *curproc = myproc();
+  sighandler_t old_sigh = curproc->signal_handler[signal_number];
+  curproc->signal_handler[signal_number] = handler;
+  return old_sigh;
+}
+
+// restore frame or something?
+void sigret(void) {
+   // TODO
+  return;
 }

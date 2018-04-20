@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+typedef void (*sighandler_t)(int);
 
 // bio.c
 void            binit(void);
@@ -120,6 +121,12 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+
+// This will update the process signal mask, returns  old mask.
+uint sigprocmask (uint sigmask);
+// Updates signal handler.
+sighandler_t signal(int signal_number, sighandler_t handler);
+void sigret(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

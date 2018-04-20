@@ -1,5 +1,6 @@
 struct stat;
 struct rtcdate;
+typedef void (*sighandler_t)(int);
 
 // system calls
 int fork(void);
@@ -37,3 +38,9 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+
+// This will update the process signal mask, returns  old mask.
+uint sigprocmask (uint sigmask);
+// Updates signal handler.
+sighandler_t signal(int signal_number, sighandler_t handler);
+void sigret(void);

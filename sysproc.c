@@ -89,3 +89,31 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+//This will update the process signal mask, returns old mask.
+uint
+sys_sigprocmask(void) {
+  uint signal_mask;
+  argint(0, (int *)&signal_mask);
+  return sigprocmask(signal_mask);
+}
+
+//This will update the process signal handler.
+uint
+sys_signal(void) {
+  sighandler_t handler;
+  int signal_number;
+  if(argint(0, &signal_number) < 0){
+    return -1;
+  }
+  if(argptr(1, (void*) &handler, sizeof(handler)) < 0) {
+    return -1;
+  }
+  return (uint)signal(signal_number, handler);
+}
+
+void
+sys_sigret(void)
+{
+  sigret();
+}
