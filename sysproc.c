@@ -30,10 +30,17 @@ int
 sys_kill(void)
 {
   int pid;
+  int signal_number;
 
-  if(argint(0, &pid) < 0)
+  if(argint(0, &pid) < 0) {
     return -1;
-  return kill(pid);
+  }
+
+  if(argint(1, &signal_number) < 0) {
+    return -1;
+  }
+  
+  return kill(pid, signal_number);
 }
 
 int
