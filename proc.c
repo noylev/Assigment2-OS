@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "signal.h"
 
 struct {
   struct spinlock lock;
@@ -497,21 +498,28 @@ wakeup(void *chan)
 // Process won't exit until it returns
 // to user space (see trap in trap.c).
 int
-kill(int pid)
+kill(int pid, int signum)
 {
   struct proc *p;
 
   acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     if(p->pid == pid){
-      p->killed = 1;
-      // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
-        p->state = RUNNABLE;
+
+      if (p->state == ZOMBIE || signum > 31 || signum < 0) {
+        /// Process died or signum out of bounderies.
+        release(&ptable.lock);
+        return -1;
+      }
+
+      // Set the correct signal bit.
+      BIT_SET(p->pending_signals, signum);
       release(&ptable.lock);
       return 0;
     }
   }
+
+  // PID not found.
   release(&ptable.lock);
   return -1;
 }

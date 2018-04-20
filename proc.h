@@ -1,10 +1,3 @@
-#define SIGDFL -1 /* default signal handling */
-#define SIGIGN 1 /*ignore signal */
-#define SIGKILL 9
-#define SIGSTOP 17
-#define SIGCONT 19
-typedef void (*sighandler_t)(int);
-
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID

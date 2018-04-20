@@ -6,6 +6,7 @@
 #include "defs.h"
 #include "x86.h"
 #include "elf.h"
+#include "signal.h"
 
 int
 exec(char *path, char **argv)
@@ -101,12 +102,12 @@ exec(char *path, char **argv)
   curproc->tf->esp = sp;
   switchuvm(curproc);
   freevm(oldpgdir);
-  
+
   int index = 0;
     for(index = 0; index < 32; index++){
       if(curproc->signal_handler[index] != (void*)SIGIGN){
           curproc->signal_handler[index]= (void*)SIGDFL; /*had to do casting to void* for SIGDFL to solve error*/
-          
+
     }
 }
 
