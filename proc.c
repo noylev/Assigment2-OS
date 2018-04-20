@@ -62,7 +62,7 @@ struct proc*
 myproc(void) {
   struct cpu *c;
   struct proc *p;
-  pushcli();
+  pushcli(); // disable interrupts to avoid deadlock.
   c = mycpu();
   p = c->proc;
   popcli();
@@ -74,15 +74,23 @@ int
 allocpid(void)
 {
   int pid;
-  //acquire(&ptable.lock);
-  //pid = nextpid++;
-  //release(&ptable.lock);
+
   pid = nextpid;
   while (!cas(&nextpid, pid, pid + 1)){
      pid = nextpid;
 };
 
   return pid;
+}
+
+struct proc* find_unused_entry(){
+    struct proc *p = 0;
+    for (p = ptable.proc; p<&ptable.proc[NPROC]; p++){
+      if(p->state == UNUSED)
+        return p;
+    }
+return 0;
+
 }
 
 
@@ -97,20 +105,13 @@ allocproc(void)
   struct proc *p;
   char *sp;
 
-  acquire(&ptable.lock);
+  p = find_unused_entry(); //trying to find an UNUSED entry in the process table
+  if(p == 0) //if it didn't find it returns NULL and we want to exit
+    return 0;
+  else
+    cas(&p->state, UNUSED, EMBRYO);// else, for p UNUSED perform cas form UNUSED to EMBRYO
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == UNUSED)
-      goto found;
-
-  release(&ptable.lock);
-  return 0;
-
-found:
-  p->state = EMBRYO;
-  release(&ptable.lock);
   p->pid = allocpid();
-
 
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
@@ -132,6 +133,12 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
+
+  //added here to 3.2 - for new process we add signal's handler
+  for(int i = 0; i < 32; i++){
+    p->signal_handler[i] = 0;
+  }
+  //added here to 3.2 - for new process we add signal's handler
 
   return p;
 }
