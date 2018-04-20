@@ -1,5 +1,22 @@
 // Routines to let C code use special x86 instructions.
 
+
+
+//static inline int cas(volatile void *addr, int expected, int newval)
+static inline int cas(volatile int * addr, int expected, int newval) {
+  int result = 1;
+  // if (eax == [ebx]) do [ebx] = newval else eax = [ebx]
+  asm volatile("lock; cmpxchgl %3, (%2)\n\t" 
+                "jz cas_true\n\t"
+                "movl $0, %0\n\t"
+                "cas_true:\n\t"
+                : "=m"(result)
+                : "a"(expected), "b"(addr), "r"(newval)
+                : "memory");
+  return result;
+}
+
+
 static inline uchar
 inb(ushort port)
 {
