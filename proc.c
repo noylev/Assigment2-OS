@@ -556,8 +556,8 @@ procdump(void)
 // Changes signal mask.
 uint sigprocmask (uint signal_mask) {
   struct proc * current_proc = myproc();
-  uint old_signal_mask = current_proc->sigmask;
-  current_proc->sigmask = signal_mask;
+  uint old_signal_mask = current_proc->signal_mask;
+  current_proc->signal_mask = signal_mask;
   return old_signal_mask;
 }
 
@@ -567,8 +567,8 @@ sighandler_t signal(int signal_number, sighandler_t handler) {
     return (void*) -2;
   }
   struct proc *curproc = myproc();
-  sighandler_t old_sigh = curproc->signal_handlers[signal_number];
-  curproc->signal_handlers[signal_number] = handler;
+  sighandler_t old_sigh = curproc->signal_handler[signal_number];
+  curproc->signal_handler[signal_number] = handler;
   return old_sigh;
 }
 
