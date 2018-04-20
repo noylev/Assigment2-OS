@@ -1,10 +1,9 @@
 #define SIG_DFL 0 /* default signal handling */
 #define SIG_IGN 1 /*ignore signal */
-
 #define SIGKILL 9
 #define SIGSTOP 17
 #define SIGCONT 19
-
+typedef void (*sighandler_t)(int);
 
 // Per-CPU state
 struct cpu {
@@ -60,7 +59,8 @@ struct proc {
   uint pending_signals;    //task 2.1.1
   uint signal_mask;       //task 2.1.1
   void* signal_handler[32];    //task 2.1.1
-
+  // Trapframe backup.
+  struct trapframe *tf_backup;
 };
 
 // Process memory is laid out contiguously, low addresses first:
