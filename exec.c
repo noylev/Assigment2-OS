@@ -102,13 +102,14 @@ exec(char *path, char **argv)
   switchuvm(curproc);
   freevm(oldpgdir);
   
-  for(int index = 0; index < 32; index++){
-    if(curproc->signal_handler[index] != (void*)SIG_IGN){
-curproc->signal_handler[index] = SIG_DFL;
-        
+  int index = 0;
+    for(index = 0; index < 32; index++){
+      if(curproc->signal_handler[index] != (void*)SIGIGN){
+          curproc->signal_handler[index]= (void*)SIGDFL; /*had to do casting to void* for SIGDFL to solve error*/
+          
     }
 }
-  
+
   return 0;
 
  bad:
