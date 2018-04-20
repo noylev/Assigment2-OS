@@ -8,6 +8,9 @@
 #include "spinlock.h"
 #include "signal.h"
 
+extern void sigret_start(void);
+extern void sigret_end(void);
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -160,6 +163,13 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  // Init signal/masking data.
+  for(int index = 0; index < 32; ++index) {
+    p->signal_handler[index] =(void*) SIGDFL;
+  }
+  p->pending_signals = 0;
+  p->signal_mask = 0;
+
   // this assignment to p->state lets other cores
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
@@ -219,6 +229,8 @@ fork(void)
   *np->tf = *curproc->tf;
 
   // Copy signal masks and handers.
+  // Reset signals.
+  np->pending_signals = 0;
   np->signal_mask = curproc->signal_mask;
   for(i = 0; i < 32; i++){
     np->signal_handler[i] = curproc->signal_handler[i];
@@ -585,25 +597,19 @@ sighandler_t signal(int signal_number, sighandler_t handler) {
   return old_sigh;
 }
 
-// restore frame or something?
-void sigret(void) {
-   // TODO
-  return;
-}
-
 // =============== Kernel Signal handlers ====================
 // SIGKILL - kill process.
 void signal_handler_kill() {
-  struct proc *current_proc = myproc();
-  current_proc->killed = 1;
+  struct proc *current_process = myproc();
+  current_process->killed = 1;
   return;
 }
 
 // SIGSTOP -- stop process.
 void signal_handler_stop() {
-  struct proc *current_proc = myproc();
+  struct proc *current_process = myproc();
 
-  while(BIT_READ (current_proc->pending_signals, SIGCONT) == 0) {
+  while(BIT_READ (current_process->pending_signals, SIGCONT) == 0) {
     yield();
   }
 
@@ -612,11 +618,87 @@ void signal_handler_stop() {
 
 // SIGCONT -- continue process.
 void signal_handler_continue() {
-  struct proc *current_proc = myproc();
+  struct proc *current_process = myproc();
 
-  if (BIT_READ(current_proc->pending_signals, SIGSTOP) == 1) {
-    BIT_SET(curproc->pending_signals, SIGCONT);
+  if (BIT_READ(current_process->pending_signals, SIGSTOP) == 1) {
+    BIT_SET(current_process->pending_signals, SIGCONT);
   }
 
   return;
+}
+
+
+//================================================
+void check_for_signal(struct trapframe *tf) {
+  struct proc *current_process = myproc();
+
+  if(!((tf->cs&3) == DPL_USER)){
+    return;
+  }
+
+  if(current_process->pending_signals == 0) {
+    // No pending signals.
+    return;
+  }
+
+  uint * masks = &current_process->signal_mask;
+  uint * pending = &current_process->pending_signals;
+
+  for (int bit_index = 0; bit_index < 32; bit_index++) {
+    if (BIT_READ(*masks, bit_index) == 1) {
+      // Masked bit. Skip.
+      continue;
+    }
+    if(BIT_READ(*pending, bit_index) == 0) {
+      continue;
+    }
+    if(current_process->signal_handler[bit_index] == (void*) SIGIGN){
+      BIT_CLEAR(*pending, bit_index);
+      return;
+    }
+    if (current_process->signal_handler[bit_index] == (void*) SIGDFL){
+      if (bit_index == 17) {
+        signal_handler_stop();
+      }
+      else if (bit_index == 19) {
+        signal_handler_continue();
+      }
+      else {
+        // Default action - kill.
+        signal_handler_kill();
+      }
+      // Clear bit.
+      BIT_CLEAR(*pending, bit_index);
+      return;
+    }
+    else {
+        uint stack_pointer = tf->esp;
+        stack_pointer -= sizeof(struct trapframe);
+        current_process->tf_backup = (struct trapframe *) stack_pointer;
+        memmove(current_process->tf_backup, tf, sizeof(struct trapframe));
+        uint function_size = sigret_start - sigret_end;
+        stack_pointer -= function_size;
+        uint sigret_address = stack_pointer;
+        memmove((void*) stack_pointer, sigret_start, function_size);
+        stack_pointer -= 4;
+        *(int *) stack_pointer = bit_index;
+        stack_pointer -= 4;
+        *(uint *) stack_pointer = sigret_address;
+        tf->esp = stack_pointer;
+        tf->eip = (uint) current_process->signal_handler[bit_index];
+        BIT_CLEAR(current_process->pending_signals, bit_index);
+        return;
+    }
+  }
+}
+
+// restore frame or something?
+void sigret(void) {
+  tf_restore();
+}
+
+// Restores backed-up trapframe.
+void tf_restore(void) {
+  struct proc * current_proc = myproc();
+  memmove(current_proc->tf, current_proc->tf_backup, sizeof(struct trapframe));
 }

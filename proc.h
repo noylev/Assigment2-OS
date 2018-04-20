@@ -56,6 +56,8 @@ struct proc {
   struct trapframe *tf_backup;
 };
 
+void tf_restore(void);
+
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss

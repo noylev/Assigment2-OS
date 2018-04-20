@@ -11,6 +11,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct trapframe;
 
 // bio.c
 void            binit(void);
@@ -129,6 +130,11 @@ uint sigprocmask (uint sigmask);
 // Updates signal handler.
 sighandler_t signal(int signal_number, sighandler_t handler);
 void sigret(void);
+void 			backup_tf(void);
+void 			restore_tf(void);
+void 			inject_sigh(struct trapframe*);
+void 			has_signal(struct trapframe*);
+void 			helper(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
