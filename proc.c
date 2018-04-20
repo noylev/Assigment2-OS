@@ -171,11 +171,13 @@ userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
-  acquire(&ptable.lock);
-
+  
+  
+  //acquire(&ptable.lock);
+  pushcli();// task 4.1
   p->state = RUNNABLE;
-
-  release(&ptable.lock);
+  popcli(); // task 4.1
+  //release(&ptable.lock);
 }
 
 // Grow current process's memory by n bytes.
@@ -245,11 +247,11 @@ fork(void)
 
   pid = np->pid;
 
-  acquire(&ptable.lock);
-
+  //acquire(&ptable.lock);
+  pushcli();// task 4.1
   np->state = RUNNABLE;
-
-  release(&ptable.lock);
+  popcli(); // task 4.1
+  //release(&ptable.lock);
 
   return pid;
 }
@@ -364,7 +366,8 @@ scheduler(void)
     sti();
 
     // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
+    //acquire(&ptable.lock);
+    pushcli(); //task 4 state RUNNABLE to RUNNING
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
@@ -383,7 +386,8 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    release(&ptable.lock);
+    //release(&ptable.lock);
+    popcli();
 
   }
 }
@@ -501,9 +505,11 @@ wakeup1(void *chan)
 void
 wakeup(void *chan)
 {
-  acquire(&ptable.lock);
+  //acquire(&ptable.lock);
+  pushcli();// task 4.1
   wakeup1(chan);
-  release(&ptable.lock);
+  popcli();// task 4.1
+  //release(&ptable.lock);
 }
 
 // Kill the process with the given pid.
@@ -514,25 +520,29 @@ kill(int pid, int signum)
 {
   struct proc *p;
 
-  acquire(&ptable.lock);
+  //acquire(&ptable.lock);
+  pushcli();// task 4.1
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     if(p->pid == pid){
 
       if (p->state == ZOMBIE || signum > 31 || signum < 0) {
         /// Process died or signum out of bounderies.
-        release(&ptable.lock);
+        //release(&ptable.lock);
+        popcli();// task 4.1
         return -1;
       }
 
       // Set the correct signal bit.
       BIT_SET(p->pending_signals, signum);
-      release(&ptable.lock);
+      //release(&ptable.lock);
+      popcli();// task 4.1
       return 0;
     }
   }
 
   // PID not found.
-  release(&ptable.lock);
+  popcli();// task 4.1
+  //release(&ptable.lock);
   return -1;
 }
 
