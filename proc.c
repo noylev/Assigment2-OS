@@ -74,11 +74,11 @@ allocpid(void)
   //acquire(&ptable.lock);
   //pid = nextpid++;
   //release(&ptable.lock);
-  pid = nextpid;  
+  pid = nextpid;
   while (!cas(&nextpid, pid, pid + 1)){
-     pid = nextpid; 
+     pid = nextpid;
 };
-    
+
   return pid;
 }
 
@@ -588,5 +588,35 @@ sighandler_t signal(int signal_number, sighandler_t handler) {
 // restore frame or something?
 void sigret(void) {
    // TODO
+  return;
+}
+
+// =============== Kernel Signal handlers ====================
+// SIGKILL - kill process.
+void signal_handler_kill() {
+  struct proc *current_proc = myproc();
+  current_proc->killed = 1;
+  return;
+}
+
+// SIGSTOP -- stop process.
+void signal_handler_stop() {
+  struct proc *current_proc = myproc();
+
+  while(BIT_READ (current_proc->pending_signals, SIGCONT) == 0) {
+    yield();
+  }
+
+  return;
+}
+
+// SIGCONT -- continue process.
+void signal_handler_continue() {
+  struct proc *current_proc = myproc();
+
+  if (BIT_READ(current_proc->pending_signals, SIGSTOP) == 1) {
+    BIT_SET(curproc->pending_signals, SIGCONT);
+  }
+
   return;
 }
