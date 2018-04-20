@@ -70,9 +70,14 @@ int
 allocpid(void)
 {
   int pid;
-  acquire(&ptable.lock);
-  pid = nextpid++;
-  release(&ptable.lock);
+  //acquire(&ptable.lock);
+  //pid = nextpid++;
+  //release(&ptable.lock);
+  pid = nextpid;  
+  while (!cas(&nextpid, pid, pid + 1)){
+     pid = nextpid; 
+};
+    
   return pid;
 }
 

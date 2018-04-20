@@ -3,7 +3,7 @@
 
 
 //static inline int cas(volatile void *addr, int expected, int newval)
-static inline int cas(volatile int * addr, int expected, int newval) {
+static inline int cas(volatile int * addr, int expected, int newval){
   int result = 1;
   // if (eax == [ebx]) do [ebx] = newval else eax = [ebx]
   asm volatile("lock; cmpxchgl %3, (%2)\n\t" 
