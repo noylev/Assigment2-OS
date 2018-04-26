@@ -35,7 +35,26 @@ int
 cpuid() {
   return mycpu()-cpus;
 }
-
+/***************************to do change name of function below************/
+char* getState (enum procstate state){
+	switch (state) 
+   {
+      case UNUSED: return "UNUSED";
+      case EMBRYO: return "EMBRYO";
+      case SLEEPING: return "SLEEPING";
+      case RUNNABLE: return "RUNNABLE";
+      case RUNNING: return "RUNNING";
+      case ZOMBIE: return "ZOMBIE";
+      case MINUS_UNUSED: return "MINUS_UNUSED";
+      case MINUS_EMBRYO: return "MINUS_EMBRYO";
+      case MINUS_SLEEPING: return "MINUS_SLEEPING";
+      case MINUS_RUNNABLE: return "MINUS_RUNNABLE";
+      case MINUS_RUNNING: return "MINUS_RUNNING";
+      case MINUS_ZOMBIE: return "MINUS_ZOMBIE";
+      default: return "";       
+   }
+}
+/***************************to do change name of function below************/
 // Must be called with interrupts disabled to avoid the caller being
 // rescheduled between reading lapicid and running through the loop.
 struct cpu*
@@ -185,7 +204,7 @@ userinit(void)
   
   //acquire(&ptable.lock);
   pushcli();// task 4.1
-  p->state = RUNNABLE;
+  cas (&p->state , EMBRYO , RUNNABLE);  
   popcli(); // task 4.1
   //release(&ptable.lock);
 }
