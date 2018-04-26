@@ -123,13 +123,13 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
-
+  pushcli();
   p = find_unused_entry(); //trying to find an UNUSED entry in the process table
   if(p == 0) //if it didn't find it returns NULL and we want to exit
     return 0;
   else
     cas(&p->state, UNUSED, EMBRYO);// else, for p UNUSED perform cas form UNUSED to EMBRYO
-
+  popcli();
   p->pid = allocpid();
 
   // Allocate kernel stack.
@@ -280,7 +280,7 @@ fork(void)
 
   //acquire(&ptable.lock);
   pushcli();// task 4.1
-  np->state = RUNNABLE;
+  cas (&np->state , EMBRYO , RUNNABLE);
   popcli(); // task 4.1
   //release(&ptable.lock);
 
@@ -314,7 +314,7 @@ exit(void)
   curproc->cwd = 0;
 
   acquire(&ptable.lock);
-
+  pushcli(); 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
 
@@ -514,8 +514,9 @@ sleep(void *chan, struct spinlock *lk)
 
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
-    release(&ptable.lock);
-    acquire(lk);
+   // release(&ptable.lock);
+    popcli();
+	  acquire(lk);
   }
 }
 
@@ -527,9 +528,20 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
-      p->state = RUNNABLE;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+	  /***************************change shid***************************************************************/
+    if(p->chan == chan && (p->state == SLEEPING || p->state == MINUS_SLEEPING) ){
+    	if (p->state == MINUS_SLEEPING){
+    		while (p->state != SLEEPING); //busy-wait
+    	} 
+      if (cas(&p->state ,SLEEPING, MINUS_RUNNABLE)) {
+      	p->chan = 0 ;
+      	cas(&p->state , MINUS_RUNNABLE , RUNNABLE);
+    
+    }  /***************************change shid***************************************************************/
+  }
+ }
+   
 }
 
 // Wake up all processes sleeping on chan.
@@ -584,13 +596,17 @@ kill(int pid, int signum)
 void
 procdump(void)
 {
-  static char *states[] = {
+ static char *states[] = {
   [UNUSED]    "unused",
+  [MINUS_UNUSED] "-unused", 
   [EMBRYO]    "embryo",
   [SLEEPING]  "sleep ",
+  [MINUS_SLEEPING] "-sleeping",
   [RUNNABLE]  "runble",
+  [MINUS_RUNNABLE] "-runnable",
   [RUNNING]   "run   ",
-  [ZOMBIE]    "zombie"
+  [ZOMBIE]    "zombie",
+  [MINUS_ZOMBIE] "-zombie"
   };
   int i;
   struct proc *p;
