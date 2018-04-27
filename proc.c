@@ -303,10 +303,10 @@ fork(void)
 
   pid = np->pid;
 
-
+pushcli();
   if (!cas(&np->state, EMBRYO, RUNNABLE))
       panic("cas error in fok from embryo to runnable");
-
+popcli();
 
   return pid;
 }
@@ -374,8 +374,9 @@ wait(void)
     // Scan through table looking for exited children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc)
+      if(p->parent != curproc){
         continue;
+      }
       havekids = 1;
       if(cas(&p->state, ZOMBIE, MINUS_UNUSED)){
         // Found one.
@@ -387,10 +388,10 @@ wait(void)
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
-       // p->state = UNUSED;
+        p->state = UNUSED;
        // cas(&p->state, MINUS_SLEEPING, RUNNING);
         //release(&ptable.lock);
-        cas(&p->state, MINUS_UNUSED, UNUSED);
+        //cas(&p->state, MINUS_UNUSED, UNUSED);
         popcli();
         return pid;
       }
@@ -399,9 +400,9 @@ wait(void)
     // No point waiting if we don't have any children.
     if(!havekids || curproc->killed){
       //release(&ptable.lock);
-        if (!cas(&p->state, MINUS_SLEEPING, RUNNING))
-            panic("MINUS_SLEEPING to RUNNING failed in wait function");
-        popcli();
+        //if (!cas(&p->state, MINUS_SLEEPING, RUNNING))
+        //    panic("MINUS_SLEEPING to RUNNING failed in wait function");
+      popcli();
       return -1;
     }
 
