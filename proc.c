@@ -364,7 +364,7 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
        // p->state = UNUSED;
-        cas(&p->state, MINUS_SLEEPING, RUNNING);
+       // cas(&p->state, MINUS_SLEEPING, RUNNING);
         //release(&ptable.lock);
         cas(&p->state, MINUS_UNUSED, UNUSED);
         popcli();
@@ -412,7 +412,7 @@ scheduler(void)
         if(!cas(&p->state, RUNNABLE, RUNNING)) {
             continue;
       }
-
+        cas(&p->state, MINUS_RUNNABLE, RUNNABLE);
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -519,19 +519,25 @@ sleep(void *chan, struct spinlock *lk)
 
   if(lk == 0)
     panic("sleep without lk");
-  pushcli();
+  
   // Must acquire ptable.lock in order to
   // change p->state and then call sched.
   // Once we hold ptable.lock, we can be
   // guaranteed that we won't miss any wakeup
   // (wakeup runs with ptable.lock locked),
   // so it's okay to release lk.
+  
+  p->chan = chan;
+  // parent need to wait so enter to minus sleeping
+    cas(&p->state, RUNNING, MINUS_SLEEPING);
+    
   if(lk != &ptable.lock){  //DOC: sleeplock0
   //  acquire(&ptable.lock);  //DOC: sleeplock1
+     pushcli();
      release(lk);
   }
   // Go to sleep.
-  p->chan = chan;
+  
   //p->state = SLEEPING;
 
   sched();
