@@ -37,7 +37,7 @@ cpuid() {
 }
 /***************************to do change name of function below************/
 char* getState (enum procstate state){
-	switch (state) 
+	switch (state)
    {
       case UNUSED: return "UNUSED";
       case EMBRYO: return "EMBRYO";
@@ -51,7 +51,7 @@ char* getState (enum procstate state){
       case MINUS_RUNNABLE: return "MINUS_RUNNABLE";
       case MINUS_RUNNING: return "MINUS_RUNNING";
       case MINUS_ZOMBIE: return "MINUS_ZOMBIE";
-      default: return "";       
+      default: return "";
    }
 }
 /***************************to do change name of function below************/
@@ -102,14 +102,17 @@ allocpid(void)
   return pid;
 }
 
+/**
+ * Find an unused process (state of UNUSED).
+ */
 struct proc* find_unused_entry(){
-    struct proc *p = 0;
-    for (p = ptable.proc; p<&ptable.proc[NPROC]; p++){
-      if(p->state == UNUSED)
-        return p;
+  struct proc *p = 0;
+  for (p = ptable.proc; p<&ptable.proc[NPROC]; p++){
+    if(p->state == UNUSED) {
+      return p;
     }
-return 0;
-
+  }
+  return 0;
 }
 
 
@@ -132,15 +135,25 @@ allocproc(void)
   //popcli();
   /*********************need to wtich with code above*/////////////
   pushcli();
-  do {
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-      if(p->state == UNUSED)
-        break;
-    if (p == &ptable.proc[NPROC]) {
+
+ 
+  // Trying to find an UNUSED entry in the process table
+  p = find_unused_entry();
+  if (p == 0) {
+    popcli();
+    return 0;
+  }
+  while(!cas(&p->state, UNUSED, EMBRYO)) {
+    if (p == 0) {
+      // Didn't find... return NULL and we want to exit
       popcli();
-      return 0; // ptable is full
+      return 0;
     }
-  } while (!cas(&p->state, UNUSED, EMBRYO));
+    // UNUSED entry was taken before we could switch it to embryo.
+    // Try again...
+    p = find_unused_entry();
+  }
+
   popcli();
 /*********************need to wtich with code above*/////////////
   p->pid = allocpid();
@@ -170,7 +183,9 @@ allocproc(void)
   for(int i = 0; i < 32; i++){
     p->signal_handler[i] = 0;
   }
-  //added here to 3.2 - for new process we add signal's handler
+  // Set signals.
+  p->pending_signals = 0;
+  p->signal_mask = 0;
 
   return p;
 }
@@ -213,14 +228,11 @@ userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
-  
-  
-  //acquire(&ptable.lock);
-  pushcli();// task 4.1
+
+
   if(!cas (&p->state , EMBRYO , RUNNABLE))
       panic("cas from embryo to runnable");
-  popcli(); // task 4.1
-  //release(&ptable.lock);
+
 }
 
 // Grow current process's memory by n bytes.
@@ -291,12 +303,10 @@ fork(void)
 
   pid = np->pid;
 
-  //acquire(&ptable.lock);
-  pushcli();// task 4.1
+
   if (!cas(&np->state, EMBRYO, RUNNABLE))
       panic("cas error in fok from embryo to runnable");
-  popcli(); // task 4.1
-  //release(&ptable.lock);
+
 
   return pid;
 }
@@ -328,10 +338,10 @@ exit(void)
   curproc->cwd = 0;
 
   //acquire(&ptable.lock);
-  pushcli();   
+  pushcli();
   if(!cas(&curproc->state, RUNNING, MINUS_ZOMBIE))
     panic("cas failed in exit function");
-  
+
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
 
@@ -444,11 +454,20 @@ scheduler(void)
       if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
            wakeup1(p->parent);
       }
+
       
       if (cas(&p->state, MINUS_SLEEPING, SLEEPING)) {
         if(p->killed == 1){
           p->state = RUNNABLE;
-        }
+            
+        }          
+    }
+
+
+
+        if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
+          wakeup1(p->parent);
+
       }
     
 
@@ -530,26 +549,26 @@ sleep(void *chan, struct spinlock *lk)
     panic("sleep");
   if(lk == 0)
     panic("sleep without lk");
-  
+
   // Must acquire ptable.lock in order to
   // change p->state and then call sched.
   // Once we hold ptable.lock, we can be
   // guaranteed that we won't miss any wakeup
   // (wakeup runs with ptable.lock locked),
   // so it's okay to release lk.
-  
+
   p->chan = chan;
   // parent need to wait so enter to minus sleeping
    if(!cas(&p->state, RUNNING, MINUS_SLEEPING))
        panic("cas failed in sleep from running to minus sleeping");
-    
+
   if(lk != &ptable.lock){  //DOC: sleeplock0
   //  acquire(&ptable.lock);  //DOC: sleeplock1
      pushcli();
      release(lk);
   }
   // Go to sleep.
-  
+
   //p->state = SLEEPING;
 
   sched();
@@ -560,10 +579,10 @@ sleep(void *chan, struct spinlock *lk)
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
    // release(&ptable.lock);
+
       popcli();
     acquire(lk);
   }
-  
 }
 
 //PAGEBREAK!
@@ -579,16 +598,16 @@ wakeup1(void *chan)
     if(p->chan == chan && (p->state == SLEEPING || p->state == MINUS_SLEEPING) ){
     	if (p->state == MINUS_SLEEPING){
     		while (p->state != SLEEPING); //busy-wait
-    	} 
+    	}
       if (cas(&p->state ,SLEEPING, MINUS_RUNNABLE)) {
       	p->chan = 0 ;
       	if(!cas(&p->state , MINUS_RUNNABLE , RUNNABLE))
             panic("faild cas in wakeup1");
-    
+
     }  /***************************change shid***************************************************************/
   }
  }
-   
+
 }
 
 // Wake up all processes sleeping on chan.
@@ -611,7 +630,7 @@ kill(int pid, int signum)
   struct proc *p;
 
   //acquire(&ptable.lock);
-  //pushcli();// task 4.1
+  pushcli();// task 4.1
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     if(p->pid == pid){
 
@@ -626,13 +645,13 @@ kill(int pid, int signum)
       BIT_SET(p->pending_signals, signum);
       cas (&p->state , SLEEPING , RUNNABLE);
       //release(&ptable.lock);
-     // popcli();// task 4.1
+     popcli();// task 4.1
       return 0;
     }
   }
 
   // PID not found.
-  //popcli();// task 4.1
+  popcli();// task 4.1
   //release(&ptable.lock);
   return -1;
 }
@@ -646,7 +665,7 @@ procdump(void)
 {
  static char *states[] = {
   [UNUSED]    "unused",
-  [MINUS_UNUSED] "-unused", 
+  [MINUS_UNUSED] "-unused",
   [EMBRYO]    "embryo",
   [SLEEPING]  "sleep ",
   [MINUS_SLEEPING] "-sleeping",
@@ -731,6 +750,11 @@ void signal_handler_continue() {
 //================================================
 void check_for_signal(struct trapframe *tf) {
   struct proc *current_process = myproc();
+
+  if (current_process == 0) {
+    // No process.
+    return;
+  }
 
   if(!((tf->cs&3) == DPL_USER)){
     return;
