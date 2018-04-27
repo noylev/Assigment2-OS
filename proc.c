@@ -603,7 +603,7 @@ kill(int pid, int signum)
   struct proc *p;
 
   //acquire(&ptable.lock);
-  //pushcli();// task 4.1
+  pushcli();// task 4.1
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     if(p->pid == pid){
 
@@ -618,13 +618,13 @@ kill(int pid, int signum)
       BIT_SET(p->pending_signals, signum);
       cas (&p->state , SLEEPING , RUNNABLE);
       //release(&ptable.lock);
-     // popcli();// task 4.1
+     popcli();// task 4.1
       return 0;
     }
   }
 
   // PID not found.
-  //popcli();// task 4.1
+  popcli();// task 4.1
   //release(&ptable.lock);
   return -1;
 }
@@ -723,6 +723,11 @@ void signal_handler_continue() {
 //================================================
 void check_for_signal(struct trapframe *tf) {
   struct proc *current_process = myproc();
+
+  if (current_process == 0) {
+    // No process.
+    return;
+  }
 
   if(!((tf->cs&3) == DPL_USER)){
     return;
