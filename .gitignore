@@ -26,3 +26,4 @@ entryother
 initcode.out
 bootblock
 fs.img
+_testsignals
