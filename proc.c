@@ -93,11 +93,12 @@ int
 allocpid(void)
 {
   int pid;
+  pushcli();
   pid = nextpid;
   while (!cas(&nextpid, pid, pid + 1)){
      pid = nextpid;
 };
-
+  popcli();
   return pid;
 }
 
@@ -344,8 +345,8 @@ wait(void)
   struct proc *p;
   int havekids, pid;
   struct proc *curproc = myproc();
-
-  acquire(&ptable.lock);
+  pushcli();
+  //acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
     havekids = 0;
@@ -513,10 +514,8 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-
   if(p == 0)
     panic("sleep");
-
   if(lk == 0)
     panic("sleep without lk");
   
@@ -529,7 +528,8 @@ sleep(void *chan, struct spinlock *lk)
   
   p->chan = chan;
   // parent need to wait so enter to minus sleeping
-    cas(&p->state, RUNNING, MINUS_SLEEPING);
+   if(!cas(&p->state, RUNNING, MINUS_SLEEPING))
+       panic("cas failed in sleep from running to minus sleeping");
     
   if(lk != &ptable.lock){  //DOC: sleeplock0
   //  acquire(&ptable.lock);  //DOC: sleeplock1
