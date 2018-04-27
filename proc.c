@@ -93,7 +93,6 @@ int
 allocpid(void)
 {
   int pid;
-
   pid = nextpid;
   while (!cas(&nextpid, pid, pid + 1)){
      pid = nextpid;
@@ -203,9 +202,10 @@ userinit(void)
   
   
   //acquire(&ptable.lock);
-  pushcli();// task 4.1
-  cas (&p->state , EMBRYO , RUNNABLE);  
-  popcli(); // task 4.1
+  //pushcli();// task 4.1
+  if(!cas (&p->state , EMBRYO , RUNNABLE))
+      panic("cas from embryo to runnable");
+  //popcli(); // task 4.1
   //release(&ptable.lock);
 }
 
@@ -216,7 +216,6 @@ growproc(int n)
 {
   uint sz;
   struct proc *curproc = myproc();
-
   sz = curproc->sz;
   if(n > 0){
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
@@ -279,9 +278,10 @@ fork(void)
   pid = np->pid;
 
   //acquire(&ptable.lock);
-  pushcli();// task 4.1
-  cas (&np->state , EMBRYO , RUNNABLE);
-  popcli(); // task 4.1
+  //pushcli();// task 4.1
+  if (!cas(&np->state, EMBRYO, RUNNABLE))
+      panic("cas error in fok from embryo to runnable");
+  //popcli(); // task 4.1
   //release(&ptable.lock);
 
   return pid;
@@ -313,8 +313,11 @@ exit(void)
   end_op();
   curproc->cwd = 0;
 
-  acquire(&ptable.lock);
-  pushcli(); 
+  //acquire(&ptable.lock);
+  pushcli();   
+  if(!cas(&curproc->state, RUNNING, MINUS_ZOMBIE))
+    panic("cas failed in exit function");
+  
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
 
@@ -350,7 +353,7 @@ wait(void)
       if(p->parent != curproc)
         continue;
       havekids = 1;
-      if(p->state == ZOMBIE){
+      if(cas(&p->state, ZOMBIE, MINUS_UNUSED)){
         // Found one.
         pid = p->pid;
         kfree(p->kstack);
@@ -360,15 +363,21 @@ wait(void)
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
-        p->state = UNUSED;
-        release(&ptable.lock);
+       // p->state = UNUSED;
+        cas(&p->state, MINUS_SLEEPING, RUNNING);
+        //release(&ptable.lock);
+        cas(&p->state, MINUS_UNUSED, UNUSED);
+        popcli();
         return pid;
       }
     }
 
     // No point waiting if we don't have any children.
     if(!havekids || curproc->killed){
-      release(&ptable.lock);
+      //release(&ptable.lock);
+        if (!cas(&p->state, MINUS_SLEEPING, RUNNING))
+            panic("MINUS_SLEEPING to RUNNING failed in wait function");
+        popcli();
       return -1;
     }
 
@@ -400,8 +409,9 @@ scheduler(void)
     //acquire(&ptable.lock);
     pushcli(); //task 4 state RUNNABLE to RUNNING
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+        if(!cas(&p->state, RUNNABLE, RUNNING)) {
+            continue;
+      }
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -416,6 +426,19 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
+      cas(&p->state, MINUS_RUNNABLE, RUNNABLE);
+      if (cas(&p->state, MINUS_SLEEPING, SLEEPING)) {
+        if (cas(&p->killed, 1, 0))
+          p->state = RUNNABLE;
+      }
+      
+      //if (cas(&p->state, MINUS_RUNNABLE, RUNNABLE)) {
+      //}
+      
+        if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
+          wakeup1(p->parent);
+      }
+
     }
     //release(&ptable.lock);
     popcli();
@@ -436,8 +459,8 @@ sched(void)
   int intena;
   struct proc *p = myproc();
 
-  if(!holding(&ptable.lock))
-    panic("sched ptable.lock");
+ /// if(!holding(&ptable.lock))
+  //  panic("sched ptable.lock");
   if(mycpu()->ncli != 1)
     panic("sched locks");
   if(p->state == RUNNING)
@@ -453,10 +476,14 @@ sched(void)
 void
 yield(void)
 {
-  acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
+  //acquire(&ptable.lock);  //DOC: yieldlock
+  //myproc()->state = RUNNABLE;
+  pushcli();
+  if (!cas(&myproc()->state, RUNNING, MINUS_RUNNABLE))
+    panic("yield- cas failed");
   sched();
-  release(&ptable.lock);
+  //release(&ptable.lock);
+  popcli();
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -466,8 +493,8 @@ forkret(void)
 {
   static int first = 1;
   // Still holding ptable.lock from scheduler.
-  release(&ptable.lock);
-
+  //release(&ptable.lock);
+  popcli();
   if (first) {
     // Some initialization functions must be run in the context
     // of a regular process (e.g., they call sleep), and thus cannot
@@ -492,7 +519,7 @@ sleep(void *chan, struct spinlock *lk)
 
   if(lk == 0)
     panic("sleep without lk");
-
+  pushcli();
   // Must acquire ptable.lock in order to
   // change p->state and then call sched.
   // Once we hold ptable.lock, we can be
@@ -500,12 +527,12 @@ sleep(void *chan, struct spinlock *lk)
   // (wakeup runs with ptable.lock locked),
   // so it's okay to release lk.
   if(lk != &ptable.lock){  //DOC: sleeplock0
-    acquire(&ptable.lock);  //DOC: sleeplock1
-    release(lk);
+  //  acquire(&ptable.lock);  //DOC: sleeplock1
+     release(lk);
   }
   // Go to sleep.
   p->chan = chan;
-  p->state = SLEEPING;
+  //p->state = SLEEPING;
 
   sched();
 
@@ -515,9 +542,9 @@ sleep(void *chan, struct spinlock *lk)
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
    // release(&ptable.lock);
-    popcli();
-	  acquire(lk);
+    acquire(lk);
   }
+  popcli();
 }
 
 //PAGEBREAK!
@@ -536,7 +563,8 @@ wakeup1(void *chan)
     	} 
       if (cas(&p->state ,SLEEPING, MINUS_RUNNABLE)) {
       	p->chan = 0 ;
-      	cas(&p->state , MINUS_RUNNABLE , RUNNABLE);
+      	if(!cas(&p->state , MINUS_RUNNABLE , RUNNABLE))
+            panic("faild cas in wakeup1");
     
     }  /***************************change shid***************************************************************/
   }
@@ -564,7 +592,7 @@ kill(int pid, int signum)
   struct proc *p;
 
   //acquire(&ptable.lock);
-  pushcli();// task 4.1
+  //pushcli();// task 4.1
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     if(p->pid == pid){
 
@@ -577,14 +605,15 @@ kill(int pid, int signum)
 
       // Set the correct signal bit.
       BIT_SET(p->pending_signals, signum);
+      cas (&p->state , SLEEPING , RUNNABLE);
       //release(&ptable.lock);
-      popcli();// task 4.1
+     // popcli();// task 4.1
       return 0;
     }
   }
 
   // PID not found.
-  popcli();// task 4.1
+  //popcli();// task 4.1
   //release(&ptable.lock);
   return -1;
 }
