@@ -123,13 +123,26 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
+ // pushcli();
+ // p = find_unused_entry(); //trying to find an UNUSED entry in the process table
+  //if(p == 0) //if it didn't find it returns NULL and we want to exit
+   // return 0;
+  //else
+   // cas(&p->state, UNUSED, EMBRYO);// else, for p UNUSED perform cas form UNUSED to EMBRYO
+  //popcli();
+  /*********************need to wtich with code above*/////////////
   pushcli();
-  p = find_unused_entry(); //trying to find an UNUSED entry in the process table
-  if(p == 0) //if it didn't find it returns NULL and we want to exit
-    return 0;
-  else
-    cas(&p->state, UNUSED, EMBRYO);// else, for p UNUSED perform cas form UNUSED to EMBRYO
+  do {
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+      if(p->state == UNUSED)
+        break;
+    if (p == &ptable.proc[NPROC]) {
+      popcli();
+      return 0; // ptable is full
+    }
+  } while (!cas(&p->state, UNUSED, EMBRYO));
   popcli();
+/*********************need to wtich with code above*/////////////
   p->pid = allocpid();
 
   // Allocate kernel stack.
@@ -203,10 +216,10 @@ userinit(void)
   
   
   //acquire(&ptable.lock);
-  //pushcli();// task 4.1
+  pushcli();// task 4.1
   if(!cas (&p->state , EMBRYO , RUNNABLE))
       panic("cas from embryo to runnable");
-  //popcli(); // task 4.1
+  popcli(); // task 4.1
   //release(&ptable.lock);
 }
 
@@ -279,10 +292,10 @@ fork(void)
   pid = np->pid;
 
   //acquire(&ptable.lock);
-  //pushcli();// task 4.1
+  pushcli();// task 4.1
   if (!cas(&np->state, EMBRYO, RUNNABLE))
       panic("cas error in fok from embryo to runnable");
-  //popcli(); // task 4.1
+  popcli(); // task 4.1
   //release(&ptable.lock);
 
   return pid;
@@ -332,7 +345,7 @@ exit(void)
   }
 
   // Jump into the scheduler, never to return.
-  curproc->state = ZOMBIE;
+  //curproc->state = ZOMBIE;
   sched();
   panic("zombie exit");
 }
@@ -428,17 +441,16 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
       cas(&p->state, MINUS_RUNNABLE, RUNNABLE);
+      if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
+           wakeup1(p->parent);
+      }
+      
       if (cas(&p->state, MINUS_SLEEPING, SLEEPING)) {
-        if (cas(&p->killed, 1, 0))
+        if(p->killed == 1){
           p->state = RUNNABLE;
+        }
       }
-      
-      //if (cas(&p->state, MINUS_RUNNABLE, RUNNABLE)) {
-      //}
-      
-        if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
-          wakeup1(p->parent);
-      }
+    
 
     }
     //release(&ptable.lock);
@@ -548,9 +560,10 @@ sleep(void *chan, struct spinlock *lk)
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
    // release(&ptable.lock);
+      popcli();
     acquire(lk);
   }
-  popcli();
+  
 }
 
 //PAGEBREAK!
