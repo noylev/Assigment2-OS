@@ -3,36 +3,19 @@
 #include "user.h"
 
 void print_sent_signal(int);
+void father_part(int);
+void son_part();
 
 int main(int argc, char **argv) {
   int pid;
-  for (int j=0; j<3 ;j++) {
+  for (int index = 0; index < 3 ; index++) {
     if ((pid = fork()) != 0) {
-      sleep(200);
-      printf(2, "FATHER_%d: SENDING SIGNAL 2 TO MY SON %d\n",getpid(), kill(pid, 2));
-      sleep(50);
-      printf(2, "FATHER_%d: SENDING S-T-O-P SIGNAL TO MY SON %d\n",getpid(), kill(pid, 17));
-      sleep(50);
-      printf(2, "FATHER_%d: SENDING SIGNAL 3 TO MY SON %d\n",getpid(), kill(pid, 3));
-      printf(2, "FATHER_%d: SENDING SIGNAL 4 TO MY SON %d\n",getpid(), kill(pid, 4));
-      printf(2, "FATHER_%d: SENDING CONT SIGNAL TO MY SON- SON SHOULD CONTINUE %d\n",getpid(), kill(pid, 19));
-      //wait();
-      for(int i=0 ; i < 10 ; i++) {
-        sleep(50);
-        printf(2, "F_%d: RUNNING....\n", getpid());
-      }
+      father_part(pid);
+      // Wait for sons to die.
       wait();
     }
     else {
-      printf(2, "SON_%d: setting signal handler %d\n", getpid(), signal(2, (sighandler_t)print_sent_signal));
-      printf(2, "SON_%d: setting signal handler %d\n", getpid(), signal(3, (sighandler_t)print_sent_signal));
-      printf(2, "SON_%d: setting signal handler %d\n", getpid(), signal(4, (sighandler_t)print_sent_signal));
-    	printf(2, "SON_%d: MY ID IS %d\n", getpid(), getpid());
-
-    	for (int i=0 ; i < 10 ; i++) {
-    		sleep(50);
-    		printf(2, "SON_%d: RUNNING....\n", getpid());
-    	}
+      son_part();
     }
   }
   exit();
@@ -57,7 +40,16 @@ void father_part(int son_pid) {
 }
 
 void son_part() {
-  
+  int pid = getpid();
+  printf(2, "Son %d setting signal hanlders.", pid);
+  signal(2, (sighandler_t) print_sent_signal);
+  signal(3, (sighandler_t) print_sent_signal);
+  signal(4, (sighandler_t) print_sent_signal);
+    // Let the things run for a bit.
+    for (index = 0; index < 10; index++) {
+      printf("Son %d running.", pid);
+      sleep(50);
+    }
 }
 
 void print_sent_signal(int signum) {
