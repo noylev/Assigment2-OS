@@ -129,9 +129,14 @@ allocproc(void)
   pushcli();
   // Trying to find an UNUSED entry in the process table
   p = find_unused_entry();
-  while(p != 0 && !cas(&p->state, UNUSED, EMBRYO)) {
+  if (p == 0) {
+    popcli();
+    return 0;
+  }
+  while(!cas(&p->state, UNUSED, EMBRYO)) {
     if (p == 0) {
-      //if it didn't find it returns NULL and we want to exit
+      // Didn't find... return NULL and we want to exit
+      popcli();
       return 0;
     }
     // UNUSED entry was taken before we could switch it to embryo.
@@ -166,7 +171,9 @@ allocproc(void)
   for(int i = 0; i < 32; i++){
     p->signal_handler[i] = 0;
   }
-  //added here to 3.2 - for new process we add signal's handler
+  // Set signals.
+  p->pending_signals = 0;
+  p->signal_mask = 0;
 
   return p;
 }
@@ -210,13 +217,8 @@ userinit(void)
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
 
-
-  //acquire(&ptable.lock);
-  //pushcli();// task 4.1
   if(!cas (&p->state , EMBRYO , RUNNABLE))
       panic("cas from embryo to runnable");
-  //popcli(); // task 4.1
-  //release(&ptable.lock);
 }
 
 // Grow current process's memory by n bytes.
@@ -287,12 +289,8 @@ fork(void)
 
   pid = np->pid;
 
-  //acquire(&ptable.lock);
-  //pushcli();// task 4.1
   if (!cas(&np->state, EMBRYO, RUNNABLE))
       panic("cas error in fok from embryo to runnable");
-  //popcli(); // task 4.1
-  //release(&ptable.lock);
 
   return pid;
 }
@@ -442,8 +440,6 @@ scheduler(void)
           p->state = RUNNABLE;
       }
 
-      //if (cas(&p->state, MINUS_RUNNABLE, RUNNABLE)) {
-      //}
 
         if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
           wakeup1(p->parent);
@@ -557,9 +553,9 @@ sleep(void *chan, struct spinlock *lk)
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
    // release(&ptable.lock);
+   popcli();
     acquire(lk);
   }
-  popcli();
 }
 
 //PAGEBREAK!
