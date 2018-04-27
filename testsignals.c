@@ -25,7 +25,7 @@ void father_part(int son_pid) {
   int index = 0;
   int father_pid = getpid();
   printf(2, "Father is %d, son is %d.\n", father_pid, son_pid);
-  int signals_to_test[5] = {2,17,3,4,19}
+  int signals_to_test[5] = {2,17,3,4,19};
   for (index = 0; index < 5; index++) {
     printf(2, "Sending signal %d to son %d.", signals_to_test[index], son_pid);
     kill(son_pid, signals_to_test[index]);
@@ -34,7 +34,7 @@ void father_part(int son_pid) {
 
   // Let the things run for a bit.
   for (index = 0; index < 10; index++) {
-    printf("Father running.");
+    printf(2, "Father running.");
     sleep(50);
   }
 }
@@ -46,8 +46,8 @@ void son_part() {
   signal(3, (sighandler_t) print_sent_signal);
   signal(4, (sighandler_t) print_sent_signal);
     // Let the things run for a bit.
-    for (index = 0; index < 10; index++) {
-      printf("Son %d running.", pid);
+    for (int index = 0; index < 10; index++) {
+      printf(2, "Son %d running.", pid);
       sleep(50);
     }
 }
