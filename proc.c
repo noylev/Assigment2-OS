@@ -35,7 +35,26 @@ int
 cpuid() {
   return mycpu()-cpus;
 }
-
+/***************************to do change name of function below************/
+char* getState (enum procstate state){
+	switch (state) 
+   {
+      case UNUSED: return "UNUSED";
+      case EMBRYO: return "EMBRYO";
+      case SLEEPING: return "SLEEPING";
+      case RUNNABLE: return "RUNNABLE";
+      case RUNNING: return "RUNNING";
+      case ZOMBIE: return "ZOMBIE";
+      case MINUS_UNUSED: return "MINUS_UNUSED";
+      case MINUS_EMBRYO: return "MINUS_EMBRYO";
+      case MINUS_SLEEPING: return "MINUS_SLEEPING";
+      case MINUS_RUNNABLE: return "MINUS_RUNNABLE";
+      case MINUS_RUNNING: return "MINUS_RUNNING";
+      case MINUS_ZOMBIE: return "MINUS_ZOMBIE";
+      default: return "";       
+   }
+}
+/***************************to do change name of function below************/
 // Must be called with interrupts disabled to avoid the caller being
 // rescheduled between reading lapicid and running through the loop.
 struct cpu*
@@ -104,13 +123,13 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
-
+  pushcli();
   p = find_unused_entry(); //trying to find an UNUSED entry in the process table
   if(p == 0) //if it didn't find it returns NULL and we want to exit
     return 0;
   else
     cas(&p->state, UNUSED, EMBRYO);// else, for p UNUSED perform cas form UNUSED to EMBRYO
-
+  popcli();
   p->pid = allocpid();
 
   // Allocate kernel stack.
@@ -181,11 +200,13 @@ userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
-  acquire(&ptable.lock);
-
-  p->state = RUNNABLE;
-
-  release(&ptable.lock);
+  
+  
+  //acquire(&ptable.lock);
+  pushcli();// task 4.1
+  cas (&p->state , EMBRYO , RUNNABLE);  
+  popcli(); // task 4.1
+  //release(&ptable.lock);
 }
 
 // Grow current process's memory by n bytes.
@@ -257,11 +278,11 @@ fork(void)
 
   pid = np->pid;
 
-  acquire(&ptable.lock);
-
-  np->state = RUNNABLE;
-
-  release(&ptable.lock);
+  //acquire(&ptable.lock);
+  pushcli();// task 4.1
+  cas (&np->state , EMBRYO , RUNNABLE);
+  popcli(); // task 4.1
+  //release(&ptable.lock);
 
   return pid;
 }
@@ -293,7 +314,7 @@ exit(void)
   curproc->cwd = 0;
 
   acquire(&ptable.lock);
-
+  pushcli(); 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
 
@@ -376,7 +397,8 @@ scheduler(void)
     sti();
 
     // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
+    //acquire(&ptable.lock);
+    pushcli(); //task 4 state RUNNABLE to RUNNING
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
@@ -395,7 +417,8 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    release(&ptable.lock);
+    //release(&ptable.lock);
+    popcli();
 
   }
 }
@@ -491,8 +514,9 @@ sleep(void *chan, struct spinlock *lk)
 
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
-    release(&ptable.lock);
-    acquire(lk);
+   // release(&ptable.lock);
+    popcli();
+	  acquire(lk);
   }
 }
 
@@ -504,18 +528,31 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
-      p->state = RUNNABLE;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+	  /***************************change shid***************************************************************/
+    if(p->chan == chan && (p->state == SLEEPING || p->state == MINUS_SLEEPING) ){
+    	if (p->state == MINUS_SLEEPING){
+    		while (p->state != SLEEPING); //busy-wait
+    	} 
+      if (cas(&p->state ,SLEEPING, MINUS_RUNNABLE)) {
+      	p->chan = 0 ;
+      	cas(&p->state , MINUS_RUNNABLE , RUNNABLE);
+    
+    }  /***************************change shid***************************************************************/
+  }
+ }
+   
 }
 
 // Wake up all processes sleeping on chan.
 void
 wakeup(void *chan)
 {
-  acquire(&ptable.lock);
+  //acquire(&ptable.lock);
+  pushcli();// task 4.1
   wakeup1(chan);
-  release(&ptable.lock);
+  popcli();// task 4.1
+  //release(&ptable.lock);
 }
 
 // Kill the process with the given pid.
@@ -526,25 +563,29 @@ kill(int pid, int signum)
 {
   struct proc *p;
 
-  acquire(&ptable.lock);
+  //acquire(&ptable.lock);
+  pushcli();// task 4.1
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     if(p->pid == pid){
 
       if (p->state == ZOMBIE || signum > 31 || signum < 0) {
         /// Process died or signum out of bounderies.
-        release(&ptable.lock);
+        //release(&ptable.lock);
+        popcli();// task 4.1
         return -1;
       }
 
       // Set the correct signal bit.
       BIT_SET(p->pending_signals, signum);
-      release(&ptable.lock);
+      //release(&ptable.lock);
+      popcli();// task 4.1
       return 0;
     }
   }
 
   // PID not found.
-  release(&ptable.lock);
+  popcli();// task 4.1
+  //release(&ptable.lock);
   return -1;
 }
 
@@ -555,13 +596,17 @@ kill(int pid, int signum)
 void
 procdump(void)
 {
-  static char *states[] = {
+ static char *states[] = {
   [UNUSED]    "unused",
+  [MINUS_UNUSED] "-unused", 
   [EMBRYO]    "embryo",
   [SLEEPING]  "sleep ",
+  [MINUS_SLEEPING] "-sleeping",
   [RUNNABLE]  "runble",
+  [MINUS_RUNNABLE] "-runnable",
   [RUNNING]   "run   ",
-  [ZOMBIE]    "zombie"
+  [ZOMBIE]    "zombie",
+  [MINUS_ZOMBIE] "-zombie"
   };
   int i;
   struct proc *p;
