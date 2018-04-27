@@ -35,26 +35,7 @@ int
 cpuid() {
   return mycpu()-cpus;
 }
-/***************************to do change name of function below************/
-char* getState (enum procstate state){
-	switch (state)
-   {
-      case UNUSED: return "UNUSED";
-      case EMBRYO: return "EMBRYO";
-      case SLEEPING: return "SLEEPING";
-      case RUNNABLE: return "RUNNABLE";
-      case RUNNING: return "RUNNING";
-      case ZOMBIE: return "ZOMBIE";
-      case MINUS_UNUSED: return "MINUS_UNUSED";
-      case MINUS_EMBRYO: return "MINUS_EMBRYO";
-      case MINUS_SLEEPING: return "MINUS_SLEEPING";
-      case MINUS_RUNNABLE: return "MINUS_RUNNABLE";
-      case MINUS_RUNNING: return "MINUS_RUNNING";
-      case MINUS_ZOMBIE: return "MINUS_ZOMBIE";
-      default: return "";
-   }
-}
-/***************************to do change name of function below************/
+
 // Must be called with interrupts disabled to avoid the caller being
 // rescheduled between reading lapicid and running through the loop.
 struct cpu*
@@ -398,10 +379,7 @@ wait(void)
     }
 
     // No point waiting if we don't have any children.
-    if(!havekids || curproc->killed){
-      //release(&ptable.lock);
-        //if (!cas(&p->state, MINUS_SLEEPING, RUNNING))
-        //    panic("MINUS_SLEEPING to RUNNING failed in wait function");
+    if(!havekids || curproc->killed){    
       popcli();
       return -1;
     }
@@ -455,23 +433,15 @@ scheduler(void)
       if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
            wakeup1(p->parent);
       }
-
       
       if (cas(&p->state, MINUS_SLEEPING, SLEEPING)) {
         if(p->killed == 1){
-          p->state = RUNNABLE;
-            
+          p->state = RUNNABLE;            
         }          
     }
-
-
-
         if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
           wakeup1(p->parent);
-
       }
-    
-
     }
     //release(&ptable.lock);
     popcli();
@@ -491,7 +461,6 @@ sched(void)
 {
   int intena;
   struct proc *p = myproc();
-
  /// if(!holding(&ptable.lock))
   //  panic("sched ptable.lock");
   if(mycpu()->ncli != 1)
@@ -569,14 +538,9 @@ sleep(void *chan, struct spinlock *lk)
      release(lk);
   }
   // Go to sleep.
-
-  //p->state = SLEEPING;
-
   sched();
-
   // Tidy up.
   p->chan = 0;
-
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
    // release(&ptable.lock);
@@ -595,9 +559,8 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-	  /***************************change shid***************************************************************/
-    if(p->chan == chan && (p->state == SLEEPING || p->state == MINUS_SLEEPING) ){
-    	if (p->state == MINUS_SLEEPING){
+    if(p->chan == chan && (p->state == SLEEPING || p->state == MINUS_SLEEPING)){
+    	if(p->state == MINUS_SLEEPING){
     		while (p->state != SLEEPING); //busy-wait
     	}
       if (cas(&p->state ,SLEEPING, MINUS_RUNNABLE)) {
@@ -605,7 +568,7 @@ wakeup1(void *chan)
       	if(!cas(&p->state , MINUS_RUNNABLE , RUNNABLE))
             panic("faild cas in wakeup1");
 
-    }  /***************************change shid***************************************************************/
+    }
   }
  }
 
@@ -629,7 +592,6 @@ int
 kill(int pid, int signum)
 {
   struct proc *p;
-
   //acquire(&ptable.lock);
   pushcli();// task 4.1
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
@@ -641,7 +603,6 @@ kill(int pid, int signum)
         popcli();// task 4.1
         return -1;
       }
-
       // Set the correct signal bit.
       BIT_SET(p->pending_signals, signum);
       cas (&p->state , SLEEPING , RUNNABLE);
@@ -650,7 +611,6 @@ kill(int pid, int signum)
       return 0;
     }
   }
-
   // PID not found.
   popcli();// task 4.1
   //release(&ptable.lock);
