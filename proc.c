@@ -37,7 +37,7 @@ cpuid() {
 }
 /***************************to do change name of function below************/
 char* getState (enum procstate state){
-	switch (state) 
+	switch (state)
    {
       case UNUSED: return "UNUSED";
       case EMBRYO: return "EMBRYO";
@@ -51,7 +51,7 @@ char* getState (enum procstate state){
       case MINUS_RUNNABLE: return "MINUS_RUNNABLE";
       case MINUS_RUNNING: return "MINUS_RUNNING";
       case MINUS_ZOMBIE: return "MINUS_ZOMBIE";
-      default: return "";       
+      default: return "";
    }
 }
 /***************************to do change name of function below************/
@@ -102,14 +102,17 @@ allocpid(void)
   return pid;
 }
 
+/**
+ * Find an unused process (state of UNUSED).
+ */
 struct proc* find_unused_entry(){
-    struct proc *p = 0;
-    for (p = ptable.proc; p<&ptable.proc[NPROC]; p++){
-      if(p->state == UNUSED)
-        return p;
+  struct proc *p = 0;
+  for (p = ptable.proc; p<&ptable.proc[NPROC]; p++){
+    if(p->state == UNUSED) {
+      return p;
     }
-return 0;
-
+  }
+  return 0;
 }
 
 
@@ -124,11 +127,17 @@ allocproc(void)
   struct proc *p;
   char *sp;
   pushcli();
-  p = find_unused_entry(); //trying to find an UNUSED entry in the process table
-  if(p == 0) //if it didn't find it returns NULL and we want to exit
-    return 0;
-  else
-    cas(&p->state, UNUSED, EMBRYO);// else, for p UNUSED perform cas form UNUSED to EMBRYO
+  // Trying to find an UNUSED entry in the process table
+  p = find_unused_entry();
+  while(p != 0 && !cas(&p->state, UNUSED, EMBRYO)) {
+    if (p == 0) {
+      //if it didn't find it returns NULL and we want to exit
+      return 0;
+    }
+    // UNUSED entry was taken before we could switch it to embryo.
+    // Try again...
+    p = find_unused_entry();
+  }
   popcli();
   p->pid = allocpid();
 
@@ -200,8 +209,8 @@ userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
-  
-  
+
+
   //acquire(&ptable.lock);
   //pushcli();// task 4.1
   if(!cas (&p->state , EMBRYO , RUNNABLE))
@@ -315,10 +324,10 @@ exit(void)
   curproc->cwd = 0;
 
   //acquire(&ptable.lock);
-  pushcli();   
+  pushcli();
   if(!cas(&curproc->state, RUNNING, MINUS_ZOMBIE))
     panic("cas failed in exit function");
-  
+
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
 
@@ -432,10 +441,10 @@ scheduler(void)
         if (cas(&p->killed, 1, 0))
           p->state = RUNNABLE;
       }
-      
+
       //if (cas(&p->state, MINUS_RUNNABLE, RUNNABLE)) {
       //}
-      
+
         if (cas(&p->state, MINUS_ZOMBIE, ZOMBIE)){
           wakeup1(p->parent);
       }
@@ -518,26 +527,26 @@ sleep(void *chan, struct spinlock *lk)
     panic("sleep");
   if(lk == 0)
     panic("sleep without lk");
-  
+
   // Must acquire ptable.lock in order to
   // change p->state and then call sched.
   // Once we hold ptable.lock, we can be
   // guaranteed that we won't miss any wakeup
   // (wakeup runs with ptable.lock locked),
   // so it's okay to release lk.
-  
+
   p->chan = chan;
   // parent need to wait so enter to minus sleeping
    if(!cas(&p->state, RUNNING, MINUS_SLEEPING))
        panic("cas failed in sleep from running to minus sleeping");
-    
+
   if(lk != &ptable.lock){  //DOC: sleeplock0
   //  acquire(&ptable.lock);  //DOC: sleeplock1
      pushcli();
      release(lk);
   }
   // Go to sleep.
-  
+
   //p->state = SLEEPING;
 
   sched();
@@ -566,16 +575,16 @@ wakeup1(void *chan)
     if(p->chan == chan && (p->state == SLEEPING || p->state == MINUS_SLEEPING) ){
     	if (p->state == MINUS_SLEEPING){
     		while (p->state != SLEEPING); //busy-wait
-    	} 
+    	}
       if (cas(&p->state ,SLEEPING, MINUS_RUNNABLE)) {
       	p->chan = 0 ;
       	if(!cas(&p->state , MINUS_RUNNABLE , RUNNABLE))
             panic("faild cas in wakeup1");
-    
+
     }  /***************************change shid***************************************************************/
   }
  }
-   
+
 }
 
 // Wake up all processes sleeping on chan.
@@ -633,7 +642,7 @@ procdump(void)
 {
  static char *states[] = {
   [UNUSED]    "unused",
-  [MINUS_UNUSED] "-unused", 
+  [MINUS_UNUSED] "-unused",
   [EMBRYO]    "embryo",
   [SLEEPING]  "sleep ",
   [MINUS_SLEEPING] "-sleeping",
